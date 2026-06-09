@@ -1,0 +1,103 @@
+/* Dashboard */
+
+.section-title {
+    padding: 1 2 0 2;
+    text-style: bold;
+    color: $accent;
+}
+
+PRTable {
+    height: auto;
+    max-height: 16;
+    margin: 0 1;
+}
+
+.empty-note {
+    color: $text-muted;
+    padding: 0 3;
+}
+
+/* PR detail */
+
+#pr-header {
+    padding: 0 2;
+    background: $boost;
+    height: auto;
+}
+
+#pr-meta {
+    padding: 1 2;
+    height: auto;
+}
+
+#pr-body {
+    margin: 0 1;
+}
+
+.comment {
+    margin: 1 2 0 2;
+    padding: 0 1;
+    border-left: thick $primary;
+    height: auto;
+}
+
+.comment-header {
+    color: $text-muted;
+}
+
+.thread {
+    margin: 1 2 0 2;
+    padding: 0 1;
+    border: round $primary-darken-2;
+    height: auto;
+}
+
+.thread-header {
+    padding: 0 0 1 0;
+}
+
+.diff-hunk {
+    background: $surface;
+    margin: 0 0 1 0;
+}
+
+#diff-view {
+    padding: 1 1;
+}
+
+#checks-table {
+    height: auto;
+    margin: 1 1;
+}
+
+/* Claude modal */
+
+ClaudeOutputScreen {
+    align: center middle;
+}
+
+#claude-modal {
+    width: 85%;
+    height: 85%;
+    border: thick $primary;
+    background: $surface;
+}
+
+#claude-title {
+    dock: top;
+    padding: 0 1;
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+#claude-status {
+    dock: bottom;
+    padding: 0 1;
+    color: $text-muted;
+    background: $boost;
+}
+
+#claude-md {
+    margin: 1 1;
+}
