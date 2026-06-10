@@ -116,3 +116,18 @@ reference to the diff and a severity (critical/major/minor).
 
 Don't repeat points already raised in the existing conversation; build on them instead. \
 Be direct and specific. Output only the review."""
+
+
+def build_question_prompt(detail: PRDetail, diff: str, question: str) -> str:
+    return f"""You are answering a question about a GitHub pull request. All the \
+information you need is below — do not use any tools.
+
+{_pr_context(detail, diff)}
+
+## Question
+
+{question}
+
+Answer the question concisely using only the information provided above. \
+Reference specific files, line numbers, or comment authors where relevant. \
+Output only the answer."""

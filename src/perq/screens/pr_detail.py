@@ -25,7 +25,7 @@ from textual.widgets import (
 )
 
 from perq.github import CheckRun, Comment, PRDetail, PRSummary, ReviewThread
-from perq.prompts import build_ci_diagnosis_prompt, build_review_prompt, build_summary_prompt
+from perq.prompts import build_ci_diagnosis_prompt, build_question_prompt, build_review_prompt, build_summary_prompt
 from perq.screens.claude_output import ClaudeOutputScreen
 from perq.screens.confirm import ConfirmModal
 from perq.screens.text_input import TextInputModal
@@ -114,6 +114,7 @@ class PRDetailScreen(Screen):
         Binding("escape", "back", "Back"),
         Binding("s", "summarise", "Summarise (Claude)"),
         Binding("R", "review", "Review (Claude)"),
+        Binding("question_mark", "ask", "Ask (Claude)"),
         Binding("d", "diagnose", "Diagnose check (Claude)"),
         Binding("o", "open_browser", "Open in browser"),
         Binding("c", "comment", "Comment"),
@@ -267,6 +268,21 @@ class PRDetailScreen(Screen):
             self.app.push_screen(
                 ClaudeOutputScreen(f"Review of {self.pr.repo}#{self.pr.number}", prompt)
             )
+
+    def action_ask(self) -> None:
+        if self._claude_ready():
+            self.app.push_screen(
+                TextInputModal("Ask about this PR", required=True),
+                self._on_ask_result,
+            )
+
+    def _on_ask_result(self, question: str | None) -> None:
+        if question is None:
+            return
+        prompt = build_question_prompt(self.detail, self.diff, question)
+        self.app.push_screen(
+            ClaudeOutputScreen(f"Q&A: {self.pr.repo}#{self.pr.number}", prompt)
+        )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if not isinstance(event.data_table, ChecksTable):
