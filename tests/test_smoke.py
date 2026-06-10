@@ -23,10 +23,12 @@ from perq.prompts import (
     build_review_prompt,
     build_summary_prompt,
 )
-from textual.widgets import Static
+from textual.widgets import Static, TextArea
 
+from perq.screens.confirm import ConfirmModal
 from perq.screens.dashboard import DashboardScreen, PRTable
 from perq.screens.pr_detail import ChecksTable, PRDetailScreen
+from perq.screens.text_input import TextInputModal
 
 NOW = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
 
@@ -45,6 +47,7 @@ def make_pr(number: int = 1, title: str = "Fix the widget") -> PRSummary:
         deletions=2,
         comment_count=3,
         updated_at=NOW,
+        node_id="PR_kwDOA_fake",
     )
 
 
@@ -105,6 +108,9 @@ def make_detail(pr: PRSummary) -> PRDetail:
 class FakeClient:
     def __init__(self) -> None:
         self.dashboards: list[Dashboard] | None = None
+        self.closed_prs: list[str] = []
+        self.posted_comments: list[tuple[str, str, int, str]] = []
+        self.submitted_reviews: list[tuple[str, str, str]] = []
 
     async def fetch_dashboard(self) -> Dashboard:
         if self.dashboards:
@@ -123,6 +129,15 @@ class FakeClient:
 
     async def fetch_job_logs(self, owner: str, name: str, job_id: int) -> str:
         return "2026-06-09T12:00:00.0000000Z ##[group]Run pytest\nFAILED tests/test_x.py\n"
+
+    async def close_pr(self, node_id: str) -> None:
+        self.closed_prs.append(node_id)
+
+    async def comment_on_pr(self, owner: str, name: str, number: int, body: str) -> None:
+        self.posted_comments.append((owner, name, number, body))
+
+    async def submit_review(self, node_id: str, event: str, body: str = "") -> None:
+        self.submitted_reviews.append((node_id, event, body))
 
     async def close(self) -> None:
         pass
@@ -310,3 +325,151 @@ def test_prompts_include_pr_context_and_truncate_diff():
     review = build_review_prompt(detail, "small diff")
     assert "Why this?" in review
     assert "advisory" in review
+
+
+async def _navigate_to_detail(pilot, app) -> PRDetailScreen:
+    """Helper: navigate from dashboard to the first PR detail screen."""
+    await pilot.pause()
+    await pilot.press("enter")
+    await pilot.pause()
+    assert isinstance(app.screen, PRDetailScreen)
+    return app.screen
+
+
+async def test_comment_action_posts_and_returns():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("c")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+
+        # Type into the TextArea and submit.
+        app.screen.query_one(TextArea).insert("Great PR!")
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        await pilot.pause()  # wait for @work to complete
+
+        assert isinstance(app.screen, PRDetailScreen)
+        assert len(client.posted_comments) == 1
+        assert client.posted_comments[0] == ("octo", "spoon", 1, "Great PR!")
+
+
+async def test_comment_requires_body():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("c")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+
+        # Submit with empty body — should stay on modal.
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+        assert client.posted_comments == []
+
+
+async def test_approve_action_submits_review():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("a")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+
+        # Empty body is allowed for approve.
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert isinstance(app.screen, PRDetailScreen)
+        assert len(client.submitted_reviews) == 1
+        node_id, event, body = client.submitted_reviews[0]
+        assert node_id == "PR_kwDOA_fake"
+        assert event == "APPROVE"
+
+
+async def test_request_changes_requires_body():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("x")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+
+        # Submit with empty body — required for request changes.
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        assert isinstance(app.screen, TextInputModal)
+        assert client.submitted_reviews == []
+
+        # Type a body and submit.
+        app.screen.query_one(TextArea).insert("Please fix the typo.")
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert isinstance(app.screen, PRDetailScreen)
+        assert len(client.submitted_reviews) == 1
+        _, event, body = client.submitted_reviews[0]
+        assert event == "REQUEST_CHANGES"
+        assert body == "Please fix the typo."
+
+
+async def test_close_pr_cancel_does_not_close():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("C")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+
+        await pilot.press("n")
+        await pilot.pause()
+        assert isinstance(app.screen, PRDetailScreen)
+        assert client.closed_prs == []
+
+
+async def test_close_pr_confirm_closes():
+    client = FakeClient()
+    app = PerqApp(client=client)
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        await pilot.press("C")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+
+        await pilot.press("y")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert isinstance(app.screen, PRDetailScreen)
+        assert client.closed_prs == ["PR_kwDOA_fake"]
+
+
+async def test_mutation_actions_hidden_for_closed_pr():
+    def make_closed_detail(pr: PRSummary) -> PRDetail:
+        d = make_detail(pr)
+        return PRDetail(
+            summary=pr, body=d.body, state="MERGED",
+            base_ref=d.base_ref, head_ref=d.head_ref,
+            changed_files=d.changed_files, created_at=d.created_at,
+        )
+
+    class ClosedClient(FakeClient):
+        async def fetch_pr_detail(self, owner, name, number):
+            return make_closed_detail(make_pr(number))
+
+    app = PerqApp(client=ClosedClient())
+    async with app.run_test() as pilot:
+        await _navigate_to_detail(pilot, app)
+        screen = app.screen
+        # check_action should disable all mutating bindings.
+        for action in ("comment", "approve", "request_changes", "close_pr"):
+            assert screen.check_action(action, ()) is False

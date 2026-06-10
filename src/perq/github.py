@@ -49,6 +49,7 @@ class PRSummary:
     deletions: int
     comment_count: int
     updated_at: datetime
+    node_id: str = ""  # GraphQL global node ID, required for mutations
 
     @property
     def owner(self) -> str:
@@ -124,6 +125,7 @@ class Dashboard:
 
 PR_FRAGMENT = """
 fragment prFields on PullRequest {
+  id
   number
   title
   url
@@ -160,6 +162,7 @@ DETAIL_QUERY = """
 query PRDetail($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
+      id
       number
       title
       body
@@ -324,6 +327,7 @@ def _parse_summary(node: dict) -> PRSummary:
         deletions=node.get("deletions", 0),
         comment_count=node.get("comments", {}).get("totalCount", 0),
         updated_at=_parse_dt(node["updatedAt"]),
+        node_id=node.get("id", ""),
     )
 
 
@@ -460,6 +464,33 @@ class GitHubClient:
         )
         response.raise_for_status()
         return response.text
+
+    async def close_pr(self, node_id: str) -> None:
+        mutation = """
+mutation ClosePR($id: ID!) {
+  closePullRequest(input: {pullRequestId: $id}) {
+    pullRequest { state }
+  }
+}
+"""
+        await self._graphql(mutation, {"id": node_id})
+
+    async def comment_on_pr(self, owner: str, name: str, number: int, body: str) -> None:
+        response = await self._client.post(
+            f"/repos/{owner}/{name}/issues/{number}/comments",
+            json={"body": body},
+        )
+        response.raise_for_status()
+
+    async def submit_review(self, node_id: str, event: str, body: str = "") -> None:
+        mutation = """
+mutation SubmitReview($prId: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  addPullRequestReview(input: {pullRequestId: $prId, event: $event, body: $body}) {
+    pullRequestReview { state }
+  }
+}
+"""
+        await self._graphql(mutation, {"prId": node_id, "event": event, "body": body or None})
 
 
 async def _smoke() -> None:

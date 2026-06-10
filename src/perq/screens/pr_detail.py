@@ -27,6 +27,8 @@ from textual.widgets import (
 from perq.github import CheckRun, Comment, PRDetail, PRSummary, ReviewThread
 from perq.prompts import build_ci_diagnosis_prompt, build_review_prompt, build_summary_prompt
 from perq.screens.claude_output import ClaudeOutputScreen
+from perq.screens.confirm import ConfirmModal
+from perq.screens.text_input import TextInputModal
 
 
 def _diff_syntax(code: str) -> Syntax:
@@ -114,6 +116,10 @@ class PRDetailScreen(Screen):
         Binding("R", "review", "Review (Claude)"),
         Binding("d", "diagnose", "Diagnose check (Claude)"),
         Binding("o", "open_browser", "Open in browser"),
+        Binding("c", "comment", "Comment"),
+        Binding("a", "approve", "Approve"),
+        Binding("x", "request_changes", "Request changes"),
+        Binding("C", "close_pr", "Close PR"),
     ]
 
     def __init__(self, pr: PRSummary) -> None:
@@ -320,3 +326,108 @@ class PRDetailScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        mutating = {"comment", "approve", "request_changes", "close_pr"}
+        if action in mutating:
+            return self.detail is not None and self.detail.state == "OPEN"
+        return True
+
+    def _mutation_ready(self) -> bool:
+        if self.detail is None:
+            self.notify("Still loading the PR — try again in a moment", severity="warning")
+            return False
+        if self.detail.state != "OPEN":
+            self.notify(f"PR is {self.detail.state.lower()} — cannot modify", severity="warning")
+            return False
+        return True
+
+    def action_comment(self) -> None:
+        if not self._mutation_ready():
+            return
+        self.app.push_screen(
+            TextInputModal("Add comment", required=True),
+            self._on_comment_result,
+        )
+
+    def _on_comment_result(self, body: str | None) -> None:
+        if body is None:
+            return
+        self._post_comment(body)
+
+    @work(exclusive=True, group="pr-mutation")
+    async def _post_comment(self, body: str) -> None:
+        try:
+            await self.app.client.comment_on_pr(
+                self.pr.owner, self.pr.name, self.pr.number, body
+            )
+        except Exception as exc:
+            self.notify(f"Failed to post comment: {exc}", severity="error", timeout=10)
+            return
+        self.notify("Comment posted")
+        self.load_pr()
+
+    def action_approve(self) -> None:
+        if not self._mutation_ready():
+            return
+        self.app.push_screen(
+            TextInputModal("Approve — add a comment (optional)"),
+            self._on_approve_result,
+        )
+
+    def _on_approve_result(self, body: str | None) -> None:
+        if body is None:
+            return
+        self._submit_review("APPROVE", body)
+
+    def action_request_changes(self) -> None:
+        if not self._mutation_ready():
+            return
+        self.app.push_screen(
+            TextInputModal("Request changes", required=True),
+            self._on_request_changes_result,
+        )
+
+    def _on_request_changes_result(self, body: str | None) -> None:
+        if body is None:
+            return
+        self._submit_review("REQUEST_CHANGES", body)
+
+    @work(exclusive=True, group="pr-mutation")
+    async def _submit_review(self, event: str, body: str) -> None:
+        assert self.detail is not None
+        label = event.lower().replace("_", " ")
+        try:
+            await self.app.client.submit_review(self.detail.summary.node_id, event, body)
+        except Exception as exc:
+            self.notify(f"Failed to submit review: {exc}", severity="error", timeout=10)
+            return
+        self.notify(f"Review submitted: {label}")
+        self.load_pr()
+
+    def action_close_pr(self) -> None:
+        if not self._mutation_ready():
+            return
+        self.app.push_screen(
+            ConfirmModal(
+                "Close PR",
+                f"Close {self.pr.repo}#{self.pr.number}?",
+            ),
+            self._on_close_confirmed,
+        )
+
+    def _on_close_confirmed(self, confirmed: bool) -> None:
+        if not confirmed:
+            return
+        self._close_pr()
+
+    @work(exclusive=True, group="pr-mutation")
+    async def _close_pr(self) -> None:
+        assert self.detail is not None
+        try:
+            await self.app.client.close_pr(self.detail.summary.node_id)
+        except Exception as exc:
+            self.notify(f"Failed to close PR: {exc}", severity="error", timeout=10)
+            return
+        self.notify("PR closed")
+        self.load_pr()

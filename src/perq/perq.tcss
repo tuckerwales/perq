@@ -101,3 +101,67 @@ ClaudeOutputScreen {
 #claude-md {
     margin: 1 1;
 }
+
+/* Text input modal */
+
+TextInputModal {
+    align: center middle;
+}
+
+#text-input-modal {
+    width: 70%;
+    height: 60%;
+    border: thick $primary;
+    background: $surface;
+}
+
+#text-input-title {
+    dock: top;
+    padding: 0 1;
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+#text-body {
+    margin: 1 1;
+}
+
+#text-input-hint {
+    dock: bottom;
+    padding: 0 1;
+    color: $text-muted;
+    background: $boost;
+}
+
+/* Confirm modal */
+
+ConfirmModal {
+    align: center middle;
+}
+
+#confirm-modal {
+    width: 50;
+    height: auto;
+    border: thick $warning;
+    background: $surface;
+}
+
+#confirm-title {
+    dock: top;
+    padding: 0 1;
+    background: $warning;
+    color: $text;
+    text-style: bold;
+}
+
+#confirm-message {
+    padding: 1 2;
+    content-align: center middle;
+}
+
+#confirm-hint {
+    padding: 0 2 1 2;
+    color: $text-muted;
+    content-align: center middle;
+}
