@@ -2,6 +2,12 @@
 
 A terminal dashboard for your GitHub pull requests, built with [Textual](https://textual.textualize.io/). Browse the PRs you've opened and the ones you're involved in, drill into details, conversation, code-review comments and CI checks — and ask [Claude Code](https://claude.com/claude-code) to summarise a PR, review it, or diagnose a failing check, streamed live into the TUI. The dashboard notifies you when something changes: CI breaks or recovers, a review lands, or someone asks for yours.
 
+<p align="center">
+  <img src="docs/dashboard.png" alt="perq dashboard showing My open PRs, Review requested, and Involved sections" width="900">
+  <br>
+  <em>The dashboard — your open PRs, ones awaiting your review, and others you're involved in.</em>
+</p>
+
 ## Requirements
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/)
@@ -45,6 +51,12 @@ Press `ctrl+p` to open the command palette. Paste a GitHub PR URL (`https://gith
 
 Five tabs: **Overview** (metadata + description, with a one-line checks summary), **Conversation** (comments and review summaries), **Code comments** (review threads with their diff hunks), **Checks** (individual CI check runs and statuses), and **Files** (the full diff).
 
+<p align="center">
+  <img src="docs/pr-detail.png" alt="perq PR detail view showing the Overview tab with a Claude-generated summary" width="900">
+  <br>
+  <em>The PR detail view — the Overview tab with metadata and the rendered description.</em>
+</p>
+
 | Key | Action |
 | --- | --- |
 | `s` | Summarise the PR with Claude Code |
@@ -54,6 +66,18 @@ Five tabs: **Overview** (metadata + description, with a one-line checks summary)
 | `escape` | Back to dashboard |
 
 Claude output streams into a modal as it's generated. It is local-only and never posted to GitHub. Press `c` to copy the output to your clipboard, `escape` to cancel/close.
+
+<p align="center">
+  <img src="docs/claude-summary.png" alt="perq modal showing a Claude-generated PR summary with key changes, risk assessment, and open questions" width="900">
+  <br>
+  <em>Press <code>s</code> for a Claude summary — key changes, risk &amp; size, and open questions.</em>
+</p>
+
+<p align="center">
+  <img src="docs/claude-review.png" alt="perq modal showing a Claude-generated PR review with a verdict and detailed findings" width="900">
+  <br>
+  <em>Press <code>R</code> for a Claude review — a verdict followed by detailed findings.</em>
+</p>
 
 ### Checks
 
